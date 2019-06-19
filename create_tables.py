@@ -2,7 +2,6 @@ import configparser
 import psycopg2
 from sql_queries import create_table_queries, drop_table_queries
 
-# Load in config.
 config = configparser.ConfigParser()
 config.read('dwh.cfg')
 
@@ -38,6 +37,7 @@ def create_tables(cur, conn):
 
 
 def main():
+    """Drop tables if they exist, then create them."""
     # Create connection and cursor.
     conn = psycopg2.connect(
         "host={} dbname={} user={} password={} port={}".format(

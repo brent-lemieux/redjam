@@ -40,8 +40,13 @@ def insert_tables(cur, conn):
 
 
 def main():
+    """Populate the tables with S3 data specified in dwh.cfg."""
     # Create connection and cursor.
-    conn = psycopg2.connect("host={} dbname={} user={} password={} port={}".format(HOST, DBNAME, USER, PASSWORD, PORT))
+    conn = psycopg2.connect(
+        "host={} dbname={} user={} password={} port={}".format(
+            HOST, DBNAME, USER, PASSWORD, PORT
+        )
+    )
     cur = conn.cursor()
     # Load staging tables then insert data into the star schema.
     load_staging_tables(cur, conn)

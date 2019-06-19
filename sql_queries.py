@@ -1,6 +1,5 @@
 import configparser
 
-# CONFIG
 config = configparser.ConfigParser()
 config.read('dwh.cfg')
 
@@ -12,7 +11,6 @@ SONG_DATA = config.get("S3", "SONG_DATA")
 LOG_DATA = config.get("S3", "LOG_DATA")
 LOG_JSON_PATH = config.get("S3", "LOG_JSON_PATH")
 
-# DROP TABLES
 staging_events_table_drop = "DROP TABLE IF EXISTS staging_events"
 staging_songs_table_drop = "DROP TABLE IF EXISTS staging_songs"
 songplay_table_drop = "DROP TABLE IF EXISTS songplays"
@@ -21,7 +19,6 @@ song_table_drop = "DROP TABLE IF EXISTS songs"
 artist_table_drop = "DROP TABLE IF EXISTS artists"
 time_table_drop = "DROP TABLE IF EXISTS time"
 
-# CREATE TABLES
 staging_events_table_create= ("""
     CREATE TABLE staging_events (
         artist VARCHAR(100),
@@ -118,7 +115,6 @@ time_table_create = ("""
     );
 """)
 
-# STAGING TABLES
 staging_events_copy = ("""
     COPY staging_events
     FROM {}
@@ -134,7 +130,6 @@ staging_songs_copy = ("""
     JSON 'auto' TRUNCATECOLUMNS;
 """).format(SONG_DATA, IAM_ARN, AWS_REGION)
 
-# FINAL TABLES
 songplay_table_insert = ("""
     INSERT INTO songplays(start_time, user_id, level, song_id, artist_id,
         session_id, location, user_agent)
@@ -177,7 +172,6 @@ artist_table_insert = ("""
     ON (s.artist_id = ms.artist_id AND s.year = ms.max_year)
 """)
 
-# TODO fix insert to work with timestampa
 time_table_insert = ("""
     INSERT INTO time(start_time, hour, day, week, month, year, weekday)
     SELECT DISTINCT start_time,
@@ -191,7 +185,6 @@ time_table_insert = ("""
     FROM songplays
 """)
 
-# QUERY LISTS
 
 create_table_queries = [
     staging_events_table_create, staging_songs_table_create,
