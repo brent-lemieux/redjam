@@ -26,32 +26,22 @@ PORT = config.get("CLUSTER", "PORT")
 IAM_ROLE_NAME = config.get("CLUSTER", "IAM_ROLE_NAME")
 
 
-def create_clients():
-    """Create EC2, S3, IAM, and Redshift clients.
-
-    Returns:
-        ec2_client (boto3.resource) - EC2 client
-        s3_client (boto3.resource) - S3 client
-        iam_client (boto3.client) - IAM client
-        redshift_client (boto3.client) - Redshift client
-    """
-    ec2_client = boto3.resource(
-        'ec2', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET
-    )
-    s3_client = boto3.resource(
-        's3', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET
-    )
-    iam_client = boto3.client(
-        'iam', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET
-    )
-    redshift_client = boto3.client(
-        'redshift', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET
-    )
-    return ec2_client, s3_client, iam_client, redshift_client
+# BUILD
+def create_infrastructure():
+    """Create Redshift infrastructure for this project and set ARN."""
+    ec2_client, s3_client, iam_client, redshift_client = create_clients()
+    role_arn = create_iam_role(iam_client)
+    config.set("IAM_ROLE", "ARN", role_arn)
+    create_redshift_cluster(redshift_client, role_arn)
+    # Loop until the cluster status becomes "Available"
+    status = ""
+    while status.lower() != "available":
+        cluster_properties = get_cluster_properties(redshift_client)
+        status = cluster_properties['ClusterStatus']
+        print('Cluster status is %s' % status)
+        time.sleep(30)
+    set_vpc_properties(ec2_client, cluster_properties['VpcId'])
+    print_cluster_properties(redshift_client)
 
 
 def create_iam_role(iam_client):
@@ -106,9 +96,6 @@ def create_redshift_cluster(redshift_client, role_arn):
     Arguments:
         redshift_client (boto3.client) - Redshift client
         role_arn (str) - ARN for the IAM Role
-
-    Returns:
-
     """
     # Create the cluster if it doesn't exist.
     try:
@@ -124,7 +111,6 @@ def create_redshift_cluster(redshift_client, role_arn):
         )
     except Exception as e:
         print(e)
-
 
 
 def print_cluster_properties(redshift_client):
@@ -161,32 +147,80 @@ def get_cluster_properties(redshift_client):
     return cluster_properties
 
 
-def create_infrastructure():
-    """Create Redshift infrastructure for this project and set ARN."""
-    ec2_client, s3_client, iam_client, redshift_client = create_clients()
-    role_arn = create_iam_role(iam_client)
-    config.set("IAM_ROLE", "ARN", role_arn)
-    create_redshift_cluster(redshift_client, role_arn)
-    # Loop until the cluster status becomes "Available"
-    status = ""
-    while status.lower() != "available":
-        cluster_properties = get_cluster_properties(redshift_client)
-        status = cluster_properties['ClusterStatus']
-        print('Cluster status is %s' % status)
-        time.sleep(30)
-    print_cluster_properties(redshift_client)
+def set_vpc_properties(ec2_client, vpc_id):
+    """Open incoming TCP port to access the cluster endpoint.
+
+    Arguments:
+        ec2_client (boto3.client) - EC2 client
+        vpc_id (str) - VPC identifier for Redshift cluster
+    """
+    try:
+        vpc = ec2_client.Vpc(id=vpc_id)
+        default_security_group = list(vpc.security_groups.all())[0]
+        default_security_group.authorize_ingress(
+            GroupName=default_security_group.group_name,
+            CidrIp='0.0.0.0/0',
+            IpProtocol='TCP',
+            FromPort=int(PORT),
+            ToPort=int(PORT)
+        )
+    except Exception as e:
+        print(e)
 
 
+### DELETE
 def delete_infrastructure():
-    ec2_client, s3_client, iam_client, redshift_client = create_clients()
+    """Delete the configured infrastructure if it exists."""
+    # Create boto3 clients for AWS resources.
+    ec2_client, _, iam_client, redshift_client = create_clients()
+    # Get the clusters properties.
+    cluster_properties = get_cluster_properties(redshift_client)
+    # Clean up resources.
     redshift_client.delete_cluster(
         ClusterIdentifier=IDENTIFIER,  SkipFinalClusterSnapshot=True
     )
+    iam_client.detach_role_policy(
+        RoleName=IAM_ROLE_NAME,
+        PolicyArn="arn:aws:iam::aws:policy/AmazonS3ReadonlyAccess"
+    )
+    iam_client.delete_role(RoleName=IAM_ROLE_NAME)
 
 
+### PRINT
 def print_infrastructure():
+    """Print the configured infrastructure."""
     _, _, _, redshift_client = create_clients()
-    print(cluster_properties(redshift_client))
+    for k, v in get_cluster_properties(redshift_client):
+        print(k, v)
+
+
+### UTILITIES
+def create_clients():
+    """Create EC2, S3, IAM, and Redshift clients.
+
+    Returns:
+        ec2_client (boto3.resource) - EC2 client
+        s3_client (boto3.resource) - S3 client
+        iam_client (boto3.client) - IAM client
+        redshift_client (boto3.client) - Redshift client
+    """
+    ec2_client = boto3.resource(
+        'ec2', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
+        aws_secret_access_key=AWS_SECRET
+    )
+    s3_client = boto3.resource(
+        's3', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
+        aws_secret_access_key=AWS_SECRET
+    )
+    iam_client = boto3.client(
+        'iam', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
+        aws_secret_access_key=AWS_SECRET
+    )
+    redshift_client = boto3.client(
+        'redshift', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
+        aws_secret_access_key=AWS_SECRET
+    )
+    return ec2_client, s3_client, iam_client, redshift_client
 
 
 if __name__ == '__main__':

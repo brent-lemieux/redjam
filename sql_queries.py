@@ -99,9 +99,9 @@ song_table_create = ("""
 
 artist_table_create = ("""
     CREATE TABLE artists (
-        artist_id VARCHAR(30) PRIMARY KEY,
+        artist_id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(200),
-        location VARCHAR(60),
+        location VARCHAR(200),
         latitude NUMERIC,
         longitude NUMERIC
     )
@@ -149,9 +149,13 @@ songplay_table_insert = ("""
 
 user_table_insert = ("""
     INSERT INTO users(user_id, first_name, last_name, gender, level)
-    SELECT userId as user_id, firstName as first_name, lastName as last_name,
-        gender, level
-    FROM staging_events
+    SELECT e.userId as user_id, e.firstName as first_name,
+        e.lastName as last_name, e.gender, e.level
+    FROM staging_events e
+    INNER JOIN (select userId, max(ts) as max_ts
+                from staging_events
+                group by userId) me
+    ON (e.userId = me.userId AND e.ts = me.max_ts)
 """)
 
 song_table_insert = ("""
@@ -161,20 +165,26 @@ song_table_insert = ("""
 """)
 
 artist_table_insert = ("""
-    INSERT INTO artist(artist_id, name, location, latitude, longitude)
-    SELECT artist_id, artist_name as name, artist_location as location,
-        artist_latitude as latitude, artist_longitude as longitude
-    FROM staging_songs
+    INSERT INTO artists(artist_id, name, location, latitude, longitude)
+    SELECT DISTINCT s.artist_id, s.artist_name as name,
+        s.artist_location as location, s.artist_latitude as latitude,
+        s.artist_longitude as longitude
+    FROM staging_songs s
+    INNER JOIN (SELECT artist_id, max(year) as max_year
+                FROM staging_songs
+                GROUP BY artist_id) ms
+    ON (s.artist_id = ms.artist_id AND s.year = ms.max_year)
 """)
 
 time_table_insert = ("""
     INSERT INTO time(start_time, hour, day, week, month, year, weekday)
-    SELECT start_time, EXTRACT(hour from start_time) as hour,
-        EXTRACT(day from start_time) as day,
-        EXTRACT(week from start_time) as week,
-        EXTRACT(month from start_time) as month,
-        EXTRACT(year from start_time) as year,
-        CASE WHEN EXTRACT(dow from start_time) BETWEEN 1 AND 5 THEN 1 ELSE 0 END as weekday
+    SELECT DISTINCT ts as start_time,
+        EXTRACT(hour from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second')) as hour,
+        EXTRACT(day from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) as day,
+        EXTRACT(week from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) as week,
+        EXTRACT(month from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) as month,
+        EXTRACT(year from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) as year,
+        CASE WHEN EXTRACT(dow from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) BETWEEN 1 AND 5 THEN 1 ELSE 0 END as weekday
     FROM staging_events
 """)
 
