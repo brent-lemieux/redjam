@@ -65,12 +65,12 @@ staging_songs_table_create = ("""
 songplay_table_create = ("""
     CREATE TABLE songplays (
         songplay_id BIGINT IDENTITY(0,1) PRIMARY KEY,
-        start_time BIGINT SORTKEY,
-        user_id INT,
-        level VARCHAR(4),
-        song_id VARCHAR(25) DISTKEY,
-        artist_id VARCHAR(30),
-        session_id INT,
+        start_time BIGINT NOT NULL SORTKEY,
+        user_id INT NOT NULL,
+        level VARCHAR(4) NOT NULL,
+        song_id VARCHAR(25) NOT NULL DISTKEY,
+        artist_id VARCHAR(30) NOT NULL,
+        session_id INT NOT NULL,
         location VARCHAR(60),
         user_agent VARCHAR(200)
     );
@@ -89,18 +89,18 @@ user_table_create = ("""
 
 song_table_create = ("""
     CREATE TABLE songs (
-        song_id VARCHAR(25) PRIMARY KEY DISTKEY,
-        title VARCHAR(200),
-        artist_id VARCHAR(30),
-        year INT,
-        duration NUMERIC
+        song_id VARCHAR(25) NOT NULL PRIMARY KEY DISTKEY,
+        title VARCHAR(200) NOT NULL,
+        artist_id VARCHAR(30) NOT NULL,
+        year INT NOT NULL,
+        duration NUMERIC NOT NULL
     )
 """)
 
 artist_table_create = ("""
     CREATE TABLE artists (
-        artist_id VARCHAR(50) PRIMARY KEY,
-        name VARCHAR(200),
+        artist_id VARCHAR(50) NOT NULL PRIMARY KEY,
+        name VARCHAR(200) NOT NULL,
         location VARCHAR(200),
         latitude NUMERIC,
         longitude NUMERIC
@@ -110,7 +110,7 @@ artist_table_create = ("""
 
 time_table_create = ("""
     CREATE TABLE time (
-        start_time BIGINT PRIMARY KEY,
+        start_time BIGINT NOT NULL PRIMARY KEY,
         hour INT,
         day INT,
         week INT,
