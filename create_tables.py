@@ -39,7 +39,11 @@ def create_tables(cur, conn):
 
 def main():
     # Create connection and cursor.
-    conn = psycopg2.connect("host={} dbname={} user={} password={} port={}".format(HOST, DBNAME, USER, PASSWORD, PORT))
+    conn = psycopg2.connect(
+        "host={} dbname={} user={} password={} port={}".format(
+            HOST, DBNAME, USER, PASSWORD, PORT
+        )
+    )
     cur = conn.cursor()
     # Drop the tables if they exist and create them again.
     drop_tables(cur, conn)

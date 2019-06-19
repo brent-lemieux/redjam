@@ -13,7 +13,6 @@ LOG_DATA = config.get("S3", "LOG_DATA")
 LOG_JSON_PATH = config.get("S3", "LOG_JSON_PATH")
 
 # DROP TABLES
-
 staging_events_table_drop = "DROP TABLE IF EXISTS staging_events"
 staging_songs_table_drop = "DROP TABLE IF EXISTS staging_songs"
 songplay_table_drop = "DROP TABLE IF EXISTS songplays"
@@ -23,7 +22,6 @@ artist_table_drop = "DROP TABLE IF EXISTS artists"
 time_table_drop = "DROP TABLE IF EXISTS time"
 
 # CREATE TABLES
-
 staging_events_table_create= ("""
     CREATE TABLE staging_events (
         artist VARCHAR(100),
@@ -32,7 +30,7 @@ staging_events_table_create= ("""
         gender VARCHAR(1),
         itemInSession INT,
         lastName VARCHAR(20),
-        length NUMERIC,
+        length FLOAT,
         level VARCHAR(4),
         location VARCHAR(60),
         method VARCHAR(3),
@@ -51,13 +49,13 @@ staging_songs_table_create = ("""
     CREATE TABLE staging_songs (
         num_songs INT,
         artist_id VARCHAR(30),
-        artist_latitude NUMERIC,
-        artist_longitude NUMERIC,
+        artist_latitude FLOAT,
+        artist_longitude FLOAT,
         artist_location VARCHAR(200),
         artist_name VARCHAR(200),
         song_id VARCHAR(25),
         title VARCHAR(200),
-        duration NUMERIC,
+        duration FLOAT,
         year INT
     );
 """)
@@ -65,12 +63,12 @@ staging_songs_table_create = ("""
 songplay_table_create = ("""
     CREATE TABLE songplays (
         songplay_id BIGINT IDENTITY(0,1) PRIMARY KEY,
-        start_time BIGINT NOT NULL SORTKEY,
+        start_time TIMESTAMP NOT NULL SORTKEY,
         user_id INT NOT NULL,
-        level VARCHAR(4) NOT NULL,
+        level VARCHAR(4),
         song_id VARCHAR(25) NOT NULL DISTKEY,
         artist_id VARCHAR(30) NOT NULL,
-        session_id INT NOT NULL,
+        session_id INT,
         location VARCHAR(60),
         user_agent VARCHAR(200)
     );
@@ -78,7 +76,7 @@ songplay_table_create = ("""
 
 user_table_create = ("""
     CREATE TABLE users (
-        user_id INT NOT NULL PRIMARY KEY,
+        user_id INT PRIMARY KEY,
         first_name VARCHAR(20),
         last_name VARCHAR(20),
         gender VARCHAR(1),
@@ -89,28 +87,28 @@ user_table_create = ("""
 
 song_table_create = ("""
     CREATE TABLE songs (
-        song_id VARCHAR(25) NOT NULL PRIMARY KEY DISTKEY,
-        title VARCHAR(200) NOT NULL,
+        song_id VARCHAR(25) PRIMARY KEY DISTKEY,
+        title VARCHAR(200),
         artist_id VARCHAR(30) NOT NULL,
-        year INT NOT NULL,
-        duration NUMERIC NOT NULL
+        year INT,
+        duration FLOAT
     )
 """)
 
 artist_table_create = ("""
     CREATE TABLE artists (
-        artist_id VARCHAR(50) NOT NULL PRIMARY KEY,
-        name VARCHAR(200) NOT NULL,
+        artist_id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(200),
         location VARCHAR(200),
-        latitude NUMERIC,
-        longitude NUMERIC
+        latitude FLOAT,
+        longitude FLOAT
     )
     DISTSTYLE ALL;
 """)
 
 time_table_create = ("""
     CREATE TABLE time (
-        start_time BIGINT NOT NULL PRIMARY KEY,
+        start_time TIMESTAMP PRIMARY KEY,
         hour INT,
         day INT,
         week INT,
@@ -121,7 +119,6 @@ time_table_create = ("""
 """)
 
 # STAGING TABLES
-
 staging_events_copy = ("""
     COPY staging_events
     FROM {}
@@ -138,18 +135,21 @@ staging_songs_copy = ("""
 """).format(SONG_DATA, IAM_ARN, AWS_REGION)
 
 # FINAL TABLES
-
 songplay_table_insert = ("""
-    INSERT INTO songplays(start_time, user_id, level, song_id, artist_id, session_id, location, user_agent)
-    SELECT e.ts AS start_time, e.userId AS user_id, e.level, s.song_id,
-        s.artist_id, e.session_id, e.location, e.userAgent as user_agent
+    INSERT INTO songplays(start_time, user_id, level, song_id, artist_id,
+        session_id, location, user_agent)
+    SELECT (timestamp 'epoch' + e.ts/1000 *INTERVAL '1 second') AS start_time,
+        e.userId AS user_id, e.level, s.song_id, s.artist_id, e.session_id,
+        e.location, e.userAgent as user_agent
     FROM staging_events e
-    INNER JOIN staging_songs s ON (e.song = s.title AND e.artist = s.artist_name)
+    INNER JOIN staging_songs s
+    ON (e.song = s.title AND e.artist = s.artist_name)
 """)
 
+# Self join in order to only get the last record for the user_id.
 user_table_insert = ("""
     INSERT INTO users(user_id, first_name, last_name, gender, level)
-    SELECT e.userId as user_id, e.firstName as first_name,
+    SELECT DISTINCT e.userId as user_id, e.firstName as first_name,
         e.lastName as last_name, e.gender, e.level
     FROM staging_events e
     INNER JOIN (select userId, max(ts) as max_ts
@@ -164,6 +164,7 @@ song_table_insert = ("""
     FROM staging_songs
 """)
 
+# Self join in order to only get the last record for the artist_id.
 artist_table_insert = ("""
     INSERT INTO artists(artist_id, name, location, latitude, longitude)
     SELECT DISTINCT s.artist_id, s.artist_name as name,
@@ -176,16 +177,18 @@ artist_table_insert = ("""
     ON (s.artist_id = ms.artist_id AND s.year = ms.max_year)
 """)
 
+# TODO fix insert to work with timestampa
 time_table_insert = ("""
     INSERT INTO time(start_time, hour, day, week, month, year, weekday)
-    SELECT DISTINCT ts as start_time,
-        EXTRACT(hour from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second')) as hour,
-        EXTRACT(day from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) as day,
-        EXTRACT(week from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) as week,
-        EXTRACT(month from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) as month,
-        EXTRACT(year from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) as year,
-        CASE WHEN EXTRACT(dow from (timestamp 'epoch' + ts/1000 *INTERVAL '1 second' )) BETWEEN 1 AND 5 THEN 1 ELSE 0 END as weekday
-    FROM staging_events
+    SELECT DISTINCT start_time,
+        EXTRACT(hour FROM start_time) as hour,
+        EXTRACT(day FROM start_time) as day,
+        EXTRACT(week FROM start_time) as week,
+        EXTRACT(month FROM start_time) as month,
+        EXTRACT(year FROM start_time) as year,
+        CASE WHEN EXTRACT(dow FROM start_time) BETWEEN 1 AND 5
+            THEN 1 ELSE 0 END as weekday
+    FROM songplays
 """)
 
 # QUERY LISTS
