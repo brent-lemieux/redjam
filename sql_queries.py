@@ -138,6 +138,7 @@ songplay_table_insert = ("""
         e.location, e.userAgent as user_agent
     FROM staging_events e
     INNER JOIN staging_songs s
+    WHERE e.page = 'NextSong'
     ON (e.song = s.title AND e.artist = s.artist_name)
 """)
 
@@ -151,6 +152,7 @@ user_table_insert = ("""
                 from staging_events
                 group by userId) me
     ON (e.userId = me.userId AND e.ts = me.max_ts)
+    WHERE e.page = 'NextSong'
 """)
 
 song_table_insert = ("""
