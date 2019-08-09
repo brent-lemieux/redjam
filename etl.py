@@ -1,9 +1,15 @@
 import configparser
+import os
 import psycopg2
 from sql_queries import copy_table_queries, insert_table_queries
 
 config = configparser.ConfigParser()
-config.read('dwh.cfg')
+# Check to see which environment the code is running in.
+if 'Brent' in os.uname().nodename:
+    config.read('/Users/brent/projects/redjam/dwh.cfg')
+else:
+    config.read('/usr/local/projects/redjam/dwh.cfg')
+
 
 HOST = config.get("CLUSTER", "HOST")
 DBNAME = config.get("CLUSTER", "DBNAME")
@@ -39,7 +45,7 @@ def insert_tables(cur, conn):
         conn.commit()
 
 
-def main():
+def etl_initial_load_pipeline():
     """Populate the tables with S3 data specified in dwh.cfg."""
     # Create connection and cursor.
     conn = psycopg2.connect(
@@ -56,4 +62,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    etl_initial_load_pipeline()

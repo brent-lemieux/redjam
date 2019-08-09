@@ -7,10 +7,13 @@ import pandas as pd
 import boto3
 
 config = configparser.ConfigParser()
-config.read_file(open('dwh.cfg'))
+# Check to see which environment the code is running in.
+if 'Brent' in os.uname().nodename:
+    config.read('/Users/brent/projects/redjam/dwh.cfg')
+else:
+    config.read('/usr/local/projects/redjam/dwh.cfg')
 
-AWS_KEY = os.environ['DW_AWS_ACCESS_KEY_ID']
-AWS_SECRET = os.environ['DW_AWS_SECRET_ACCESS_KEY']
+
 AWS_REGION = 'us-west-2'
 
 CLUSTER_TYPE = config.get("CLUSTER", "CLUSTER_TYPE")
@@ -27,11 +30,12 @@ IAM_ROLE_NAME = config.get("CLUSTER", "IAM_ROLE_NAME")
 
 
 # BUILD
-def create_infrastructure():
+def create_infrastructure(aws_key, aws_secret):
     """Create Redshift infrastructure for this project and set ARN."""
-    ec2_client, s3_client, iam_client, redshift_client = create_clients()
+    ec2_client, s3_client, iam_client, redshift_client = create_clients(
+        aws_key, aws_secret
+    )
     role_arn = create_iam_role(iam_client)
-    config.set("IAM_ROLE", "ARN", role_arn)
     create_redshift_cluster(redshift_client, role_arn)
     # Loop until the cluster status becomes "Available"
     status = ""
@@ -169,10 +173,12 @@ def set_vpc_properties(ec2_client, vpc_id):
 
 
 ### DELETE
-def delete_infrastructure():
+def delete_infrastructure(aws_key, aws_secret):
     """Delete the configured infrastructure if it exists."""
     # Create boto3 clients for AWS resources.
-    ec2_client, _, iam_client, redshift_client = create_clients()
+    ec2_client, _, iam_client, redshift_client = create_clients(
+        aws_key, aws_secret
+    )
     # Get the clusters properties.
     cluster_properties = get_cluster_properties(redshift_client)
     # Clean up resources.
@@ -187,15 +193,15 @@ def delete_infrastructure():
 
 
 ### PRINT
-def print_infrastructure():
+def print_infrastructure(aws_key, aws_secret):
     """Print the configured infrastructure."""
-    _, _, _, redshift_client = create_clients()
+    _, _, _, redshift_client = create_clients(aws_key, aws_secret)
     for k, v in get_cluster_properties(redshift_client):
         print(k, v)
 
 
 ### UTILITIES
-def create_clients():
+def create_clients(aws_key, aws_secret):
     """Create EC2, S3, IAM, and Redshift clients.
 
     Returns:
@@ -205,20 +211,20 @@ def create_clients():
         redshift_client (boto3.client) - Redshift client
     """
     ec2_client = boto3.resource(
-        'ec2', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET
+        'ec2', region_name=AWS_REGION, aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_secret
     )
     s3_client = boto3.resource(
-        's3', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET
+        's3', region_name=AWS_REGION, aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_secret
     )
     iam_client = boto3.client(
-        'iam', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET
+        'iam', region_name=AWS_REGION, aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_secret
     )
     redshift_client = boto3.client(
-        'redshift', region_name=AWS_REGION, aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET
+        'redshift', region_name=AWS_REGION, aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_secret
     )
     return ec2_client, s3_client, iam_client, redshift_client
 
@@ -232,8 +238,11 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if args.build:
-        create_infrastructure()
+        create_infrastructure(AWS_KEY, AWS_SECRET)
+    else:
+        AWS_KEY = os.environ['DW_AWS_ACCESS_KEY_ID']
+        AWS_SECRET = os.environ['DW_AWS_SECRET_ACCESS_KEY']
     if args.delete:
-        delete_infrastructure()
+        delete_infrastructure(AWS_KEY, AWS_SECRET)
     if args.print:
-        print_infrastructure()
+        print_infrastructure(AWS_KEY, AWS_SECRET)

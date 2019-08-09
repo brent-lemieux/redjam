@@ -1,11 +1,15 @@
 import configparser
+import os
 
 config = configparser.ConfigParser()
-config.read('/Users/brent/projects/redjam/dwh.cfg')
+
+# Check to see which environment the code is running in.
+if 'Brent' in os.uname().nodename:
+    config.read('/Users/brent/projects/redjam/dwh.cfg')
+else:
+    config.read('/usr/local/projects/redjam/dwh.cfg')
 
 AWS_REGION = 'us-west-2'
-
-IAM_ARN = config.get("IAM_ROLE", "ARN")
 
 SONG_DATA = config.get("S3", "SONG_DATA")
 LOG_DATA = config.get("S3", "LOG_DATA")
@@ -118,17 +122,19 @@ time_table_create = ("""
 staging_events_copy = ("""
     COPY staging_events
     FROM {}
-    IAM_ROLE {}
+    ACCESS_KEY_ID '{{}}'
+    SECRET_ACCESS_KEY '{{}}'
     JSON {} maxerror as 250;
-""").format(LOG_DATA, IAM_ARN, LOG_JSON_PATH)
+""").format(LOG_DATA, LOG_JSON_PATH)
 
 staging_songs_copy = ("""
     COPY staging_songs
     FROM {}
-    IAM_ROLE {}
+    ACCESS_KEY_ID '{{}}'
+    SECRET_ACCESS_KEY '{{}}'
     COMPUPDATE OFF REGION '{}'
     JSON 'auto' TRUNCATECOLUMNS;
-""").format(SONG_DATA, IAM_ARN, AWS_REGION)
+""").format(SONG_DATA, AWS_REGION)
 
 songplay_table_insert = ("""
     INSERT INTO songplays(start_time, user_id, level, song_id, artist_id,
@@ -186,23 +192,3 @@ time_table_insert = ("""
             THEN 1 ELSE 0 END as weekday
     FROM songplays
 """)
-
-
-create_table_queries = [
-    staging_events_table_create, staging_songs_table_create,
-    songplay_table_create, user_table_create, song_table_create,
-    artist_table_create, time_table_create
-]
-
-drop_table_queries = [
-    staging_events_table_drop, staging_songs_table_drop,
-    songplay_table_drop, user_table_drop, song_table_drop, artist_table_drop,
-    time_table_drop
-]
-
-copy_table_queries = [staging_events_copy, staging_songs_copy]
-
-insert_table_queries = [
-    songplay_table_insert, user_table_insert, song_table_insert,
-    artist_table_insert, time_table_insert
-]

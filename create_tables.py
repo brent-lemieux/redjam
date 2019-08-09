@@ -1,9 +1,15 @@
 import configparser
+import os
 import psycopg2
 from sql_queries import create_table_queries, drop_table_queries
 
 config = configparser.ConfigParser()
-config.read('dwh.cfg')
+# Check to see which environment the code is running in.
+if 'Brent' in os.uname().nodename:
+    config.read('/Users/brent/projects/redjam/dwh.cfg')
+else:
+    config.read('/usr/local/projects/redjam/dwh.cfg')
+
 
 HOST = config.get("CLUSTER", "HOST")
 DBNAME = config.get("CLUSTER", "DBNAME")
@@ -36,7 +42,7 @@ def create_tables(cur, conn):
         conn.commit()
 
 
-def main():
+def create_tables_pipeline():
     """Drop tables if they exist, then create them."""
     # Create connection and cursor.
     conn = psycopg2.connect(
